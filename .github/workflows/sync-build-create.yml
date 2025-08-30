@@ -12,6 +12,8 @@ jobs:
   sync:
     name: Sync Fork
     runs-on: ubuntu-latest
+    outputs:
+      updated: ${{ steps.check_updates.outputs.updated }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
@@ -29,17 +31,32 @@ jobs:
       - name: Fetch upstream
         run: git fetch upstream
 
+      - name: Check for updates
+        id: check_updates
+        run: |
+          if [ -z "$(git log HEAD..upstream/main --oneline)" ]; then
+            echo "No updates found."
+            echo "updated=false" >> $GITHUB_OUTPUT
+          else
+            echo "Updates found."
+            echo "updated=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Merge upstream/main
+        if: steps.check_updates.outputs.updated == 'true'
         run: |
           git checkout main
           git merge upstream/main -m "Sync from upstream"
 
       - name: Push changes
-        run: git push origin main
+        if: steps.check_updates.outputs.updated == 'true'
+        run: |
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/johnlucajf/mousetrap.git main
 
   docker:
     name: Build & Push Docker
     needs: sync
+    if: needs.sync.outputs.updated == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
